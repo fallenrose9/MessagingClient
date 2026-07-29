@@ -9,12 +9,7 @@
 #pragma comment(lib, "Winhttp.lib")
 using namespace std;
 
-//Current Version of this client
-//Change/Update this value as I release a new version.
-const string CURRENT_VERSION = "v1.0.0"; // Values is 1.2.3
-//1. is main change, typically when major updates
-//2. is smaller updates that don't warrant a big update, but still significant
-//3. is small minor updates
+//Remove version variable from here and moved to main for convience sake
 
 //GitHub repo information used for updates
 //keep the repo spelling exactly the same as it is on GitHub.
@@ -52,10 +47,142 @@ string getJsonStringValue(const string& jsonText, const string& key) {
 	return jsonText.substr(firstQuote + 1, secondQuote - firstQuote - 1);
 }
 
+//Finds the browser download URL for the chatClient.exe inside the GitHub Release
+//This lets the updater download the new exe automatically.
+string getChatClientDownloadUrl(const string& jsonText) {
+	//Looks for the release asset named ChatClient.exe
+	size_t assetNamePosition = jsonText.find("ChatClient.exe");
+	//Checks if it was successful
+	if (assetNamePosition == string::npos) {
+		return "";
+	}
+
+	//After finding the new exe, loof for its browser_download_url.
+	string searchKey = "\"browser_download_url\":";
+	size_t urlKeyPosition = jsonText.find(searchKey, assetNamePosition);
+	//Checks as a back up asset search
+	if (urlKeyPosition == string::npos) {
+		urlKeyPosition = jsonText.rfind(searchKey, assetNamePosition);
+	}
+	//Checks if it was successful
+	if (urlKeyPosition == string::npos) {
+		return "";
+	}
+
+	// Finds the colon after "browser_download_url".
+	size_t colonPosition = jsonText.find(":", urlKeyPosition);
+
+	if (colonPosition == string::npos)
+	{
+		return "";
+	}
+
+	//First quote
+	size_t firstQuote = jsonText.find("\"", colonPosition);
+	//Checks if it was successful
+	if (firstQuote == string::npos) {
+		return "";
+	}
+
+	//Second quote
+	size_t secondQuote = jsonText.find("\"", firstQuote + 1);
+	//Test if successful
+	if (secondQuote == string::npos) {
+		return "";
+	}
+
+	//Returns the url
+	return jsonText.substr(firstQuote + 1, secondQuote - firstQuote - 1);
+}
+
+//Gets the folder of the chatclient.exe
+string getCurrentExeFolder() {
+	//creates character array large enough for file paths
+	char exePath[MAX_PATH];
+	//Gets the full path of the currently running exe and stores it
+	//This is ran when the chatclient exe is running
+	GetModuleFileNameA(NULL, exePath, MAX_PATH);
+	//Converts the character array into a useable C++ string
+	string fullPath = exePath;
+	//Finds the position of the final slash in the path
+	//SEperates the executable filename from folder path.
+	size_t lastSlash = fullPath.find_last_of("\\/");
+	//If no slash was found, a valid path could not be determined.
+	if (lastSlash == string::npos) {
+		return"";
+	}
+	//Returns everything before the final slash,
+	//Removing the executable filename from the path.
+	return fullPath.substr(0, lastSlash);
+}
+
+//Returns the full path of the running ChatClient.exe
+string getCurrentExePath() {
+	char exePath[MAX_PATH];
+	GetModuleFileNameA(NULL, exePath, MAX_PATH);
+	return string(exePath);
+}
+
+//Starts up Updater.exe and passes it to the download URL and current exe path.
+bool launchUpdater(const string& downloadUrl) {
+	//Gets the exe pathing
+	string exeFolder = getCurrentExeFolder();
+	string currentExePath = getCurrentExePath();
+	string updaterPath = exeFolder + "\\Updater.exe";
+
+	//Check if Updater.exe exists beside ChatClient.exe.
+	DWORD updaterAttributes = GetFileAttributesA(updaterPath.c_str());
+	if (updaterAttributes == INVALID_FILE_ATTRIBUTES) {
+		cout << "Updater.exe was not found beside ChatClient.exe." << endl;
+		cout << "Place Updater.exe in the same folder as ChatClient.exe." << endl;
+		return false;
+	}
+
+	//Command Format:
+	//Updater.exe "downloadUrl""targetExePath""restartExePath"
+	string commandLine = "\"" + updaterPath + "\" " +
+		"\"" + downloadUrl + "\" " + "\"" + currentExePath + "\" " +
+		"\"" + currentExePath + "\"";
+
+	//Startup info
+	//Stores settings windows needs to start the updater
+	STARTUPINFOA startupInfo;
+	//stores information about the newly created updater process, including 
+	//its process and thread handles
+	PROCESS_INFORMATION processInfo;
+	//Clears all fields in startupInfo so it doesn't contain leftover
+	//or unused memory values
+	ZeroMemory(&startupInfo, sizeof(startupInfo));
+	//Clears all fields in processInfo before CreateProcess uses it.
+	ZeroMemory(&processInfo, sizeof(processInfo));
+
+	//Tells windows the size of the STARTUPINFOA structure
+	//Create process requires this field to be set up correctly.
+	startupInfo.cb = sizeof(startupInfo);
+
+	//CreateProcessA needs a writable char buffer.
+	string commandBuffer = commandLine;
+	BOOL started = CreateProcessA(
+		NULL, &commandBuffer[0], NULL, NULL, FALSE, 0, NULL,
+		exeFolder.c_str(), &startupInfo, &processInfo
+	);
+	//Checks if successful
+	if (!started) {
+		cout << "Failed to start Updater.exe. Error: " << GetLastError() << endl;
+		return false;
+	}
+
+	//Clean up
+	CloseHandle(processInfo.hProcess);
+	CloseHandle(processInfo.hThread);
+
+	return true;
+}
+
 //Checks GitHub Releases to see if a new version of the client exists
 //Function only checks and prints the result
 //It does not download or replace files yet.
-void checkForUpdates() {
+void checkForUpdates(const string& currentVersion) {
 	cout << "Checking for updates..." << endl;
 	//GitHub API Server
 	LPCWSTR serverName = L"api.github.com";
@@ -165,20 +292,41 @@ void checkForUpdates() {
 	//If no tag_name was found, the repo hasn't been updated yet.
 	if (latestVersion.empty()) {
 		cout << "No GitHub release found yet." << endl;
-		cout << "Current version: " << CURRENT_VERSION << endl;
+		cout << "Current version: " << currentVersion << endl;
 		return;
 	}
-	cout << "Current version: " << CURRENT_VERSION << endl;
+	cout << "Current version: " << currentVersion << endl;
 	cout << "Latest version: " << latestVersion << endl;
 
 	//Simple and basic version check
 	//Works as long as it's a simple version,
 	//example: v1.0.0, v1.0.1, v2.0.0, etc...
-	if (latestVersion != CURRENT_VERSION) {
+	if (latestVersion != currentVersion) {
 		cout << "Update available." << endl;
-		//Intend to offer to update from within the app and have it auto download
-		//meaning updates this later to achieve
-		cout << "Go to the GitHub release page to download the new version." << endl;
+		//Gets the chatclientdownloader
+		string downloadUrl = getChatClientDownloadUrl(responseText);
+		//Checks if downloadUrl was successful
+		if (downloadUrl.empty()) {
+			cout << "Could not find ChatClient.exe in the latest GitHub release assets." << endl;
+			return;
+		}
+
+		//Prompts the user if they are ready to download the updated client
+		cout << "Download and install update now? (y/n): ";
+		//Gets the user's input
+		string answer;
+		getline(cin, answer);
+		//If (y)es
+		if (answer == "y" || answer == "Y") {
+			cout << "Starting updater..." << endl;
+			if (launchUpdater(downloadUrl)) {
+				cout << "ChatClient will now close so the updater can replace it." << endl;
+				ExitProcess(0);
+			}
+		}
+		else {
+			cout << "Update skipped." << endl;
+		}
 	}
 	else {
 		cout << "You are using the latest version." << endl;

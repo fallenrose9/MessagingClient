@@ -15,6 +15,10 @@
 #pragma comment(lib, "Ws2_32.lib")
 using namespace std;
 
+//TODO: Update this with every new Update and release!!!
+//Version variable for the version of this application
+const string CURRENT_VERSION = "v1.1.0";
+
 //Port must match the server's port
 //Need to update to allow for choosing port potentially
 const int PORT = 54000;
@@ -63,7 +67,7 @@ void recieveMessages(SOCKET clientSocket) {
 int main()
 {
     //calls the checkForUpdates function
-    checkForUpdates();
+    checkForUpdates(CURRENT_VERSION);
     cout << endl;
     //Stores the temp username for this chat session
     string username;

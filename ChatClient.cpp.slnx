@@ -4,4 +4,5 @@
     <Platform Name="x86" />
   </Configurations>
   <Project Path="ChatClient.cpp/ChatClient.cpp.vcxproj" Id="4d965a4a-9382-40cd-95bb-5f48032d824a" />
+  <Project Path="Updater/Updater.vcxproj" Id="e7d7586d-05b4-4681-967b-7358448047cc" />
 </Solution>
