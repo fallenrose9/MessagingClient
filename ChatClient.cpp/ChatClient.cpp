@@ -1,4 +1,4 @@
-// ChatClient.cpp.cpp 
+// ChatClient.cpp 
 //Basic TCP chat client using Winsock
 //This is the client app that connects to the chat server using an IP address.
 //It asks for a temporary username, sends messages, and recieves messages.
@@ -9,6 +9,8 @@
 #include <atomic>
 #include <WinSock2.h>
 #include <WS2tcpip.h>
+//This is where I'm storing all the inports for the other cpp files I intend to inlcude
+#include "ExtensionHeaderFiles/UpdateChecker.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 using namespace std;
@@ -60,6 +62,9 @@ void recieveMessages(SOCKET clientSocket) {
 //Main body function
 int main()
 {
+    //calls the checkForUpdates function
+    checkForUpdates();
+    cout << endl;
     //Stores the temp username for this chat session
     string username;
     //Stores the IP address of the server the user wants to connect to.
